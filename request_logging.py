@@ -79,15 +79,14 @@ async def log_requests(request: Request, call_next):
 
 
 def summarize(path: Path) -> None:
-    """Print a compact table; every line of the file must be valid JSON."""
-    print(f"{'request_id':<13}{'path':<8}{'code':<5}{'outcome':<17}{'cache':<7}{'calls':<6}model_ms")
+    """Print one short line per request; every line of the file must be valid JSON."""
     for line in path.read_text(encoding="utf-8").splitlines():
         record = json.loads(line)
         if record.get("event") != "request":
             continue
-        print(f"{record['request_id']:<13}{record['path']:<8}{record['status_code']:<5}"
-              f"{record['outcome']:<17}{str(record['cache_status'] or '-'):<7}"
-              f"{record['backend_calls']:<6}{record['model_ms'] if record['model_ms'] is not None else '-'}")
+        model_ms = "-" if record["model_ms"] is None else record["model_ms"]
+        print(f"{record['request_id']} {record['status_code']} {record['outcome']} "
+              f"cache={record['cache_status'] or '-'} calls={record['backend_calls']} model_ms={model_ms}")
 
 
 if __name__ == "__main__":

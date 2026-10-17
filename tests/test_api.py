@@ -202,3 +202,14 @@ def test_log_lines_are_json_and_safe(api):
     assert [r["outcome"] for r in records[1:]] == ["health_ok", "model_success", "cache_hit", "validation_error"]
     for secret in ("secret-test-key", "Câu hỏi riêng", "Trả lời từ backend"):
         assert secret not in text
+
+
+def test_log_summary_command(api, capsys):
+    import request_logging
+    client, _, settings = api
+    client.post("/chat", json={"message": "q"})
+    client.post("/chat", json={"message": "q"})
+    request_logging.summarize(settings.request_log_file)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].endswith("200 model_success cache=MISS calls=1 model_ms=" + lines[0].rsplit("=", 1)[1])
+    assert lines[1].endswith("200 cache_hit cache=HIT calls=0 model_ms=-")
