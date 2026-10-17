@@ -10,7 +10,7 @@ Mỗi request có `X-Request-ID` và một dòng JSON trong `logs/requests.jsonl
 
 ## Phiên bản đi kèm bài viết
 
-ZIP đi kèm bài #54 là mã đầy đủ của bài: commit `9e52ae6` trên GitHub cộng thêm traceback cho lỗi 500, `show_config.py` và chọn log theo request ID. Nếu lấy mã từ GitHub, checkout commit đó rồi áp dụng file `aiguru_ai_api_health_timeout_cache-review.patch` đi kèm PDF trước khi chạy test; kết quả giống hệt ZIP.
+Mã trong repository này giống hệt ZIP đi kèm bài #54. Có thể clone repository hoặc dùng ZIP; hai cách cho cùng mã và test.
 
 ## Chạy trên Linux/bash
 
