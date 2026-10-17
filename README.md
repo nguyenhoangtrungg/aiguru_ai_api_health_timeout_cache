@@ -1,4 +1,4 @@
-# AI Guru #54 — Health check, timeout và cache cho AI API
+# AI Guru #55 — Health check, timeout và cache cho AI API
 
 Mở rộng API chat của bài #53 ([aiguru_chat_api_demo](https://github.com/nguyenhoangtrungg/aiguru_chat_api_demo)) bằng ba chức năng:
 
@@ -10,7 +10,7 @@ Mỗi request có `X-Request-ID` và một dòng JSON trong `logs/requests.jsonl
 
 ## Phiên bản đi kèm bài viết
 
-Mã trong repository này giống hệt ZIP đi kèm bài #54. Có thể clone repository hoặc dùng ZIP; hai cách cho cùng mã và test.
+Mã trong repository này giống hệt ZIP đi kèm bài #55. Có thể clone repository hoặc dùng ZIP; hai cách cho cùng mã và test.
 
 ## Chạy trên Linux/bash
 
