@@ -100,6 +100,7 @@ def test_routes_and_openapi(api):
     assert client.get("/missing").status_code == 404
     assert [r["outcome"] for r in read_log(settings)] == ["http_error", "http_error"]
     assert client.get("/docs").status_code == 200
+    assert read_log(settings)[-1]["outcome"] == "other"
     schema = client.get("/openapi.json").json()
     post = schema["paths"]["/chat"]["post"]
     assert post["requestBody"]["required"] is True

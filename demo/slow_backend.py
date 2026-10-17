@@ -56,4 +56,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 print(f"[backend] listening on http://{args.host}:{args.port}/v1 delay={args.delay}s", flush=True)
-ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
+try:
+    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
+except KeyboardInterrupt:
+    print(f"[backend] stopped after {counter} request(s)", flush=True)

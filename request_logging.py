@@ -45,7 +45,9 @@ def outcome_for(request: Request, status: int) -> str:
         return "health_ok"
     if status >= 500:
         return "internal_error"
-    return "http_error"
+    if status >= 400:
+        return "http_error"
+    return "other"  # e.g. /docs and /openapi.json
 
 
 async def log_requests(request: Request, call_next):
