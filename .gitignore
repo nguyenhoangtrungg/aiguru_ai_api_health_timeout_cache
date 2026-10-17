@@ -222,3 +222,4 @@ __marimo__/
 # Tutorial #54 runtime files
 logs/
 request.json
+timeout.headers

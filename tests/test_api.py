@@ -1,4 +1,5 @@
 """Contract tests kept from #53 plus the new headers and log records."""
+import asyncio
 import json
 from pathlib import Path
 
@@ -175,20 +176,33 @@ def test_self_host_no_key(tmp_path):
         assert client.post("/chat", json={"message": "test"}).status_code == 200
 
 
-def test_unexpected_error_is_logged_as_500(tmp_path, monkeypatch):
+def test_unexpected_error_is_logged_as_500(tmp_path, monkeypatch, caplog):
     import main
 
     async def broken(*_):
         raise RuntimeError("bug secret-test-key")
     monkeypatch.setattr(main, "answer_within_deadline", broken)
     settings = make_settings(tmp_path)
-    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
-        response = client.post("/chat", json={"message": "test"})
+    async def scenario():
+        app = create_app(settings)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://app"
+            ) as client:
+                return await client.post("/chat", json={"message": "test"})
+
+    response = asyncio.run(scenario())
     assert response.status_code == 500
     assert "secret-test-key" not in response.text
     record = read_log(settings)[-1]
     assert record["outcome"] == "internal_error"
     assert record["request_id"] == response.headers["x-request-id"]
+    diagnostic = [r for r in caplog.records if r.name == "uvicorn.error" and r.exc_info]
+    assert len(diagnostic) == 1
+    assert record["request_id"] in diagnostic[0].getMessage()
+    assert diagnostic[0].exc_info[0] is RuntimeError
+    assert "secret-test-key" not in settings.request_log_file.read_text()
+    assert len(read_log(settings)) == 1
 
 
 def test_log_lines_are_json_and_safe(api):

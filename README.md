@@ -8,12 +8,17 @@ Mở rộng API chat của bài #53 ([aiguru_chat_api_demo](https://github.com/n
 
 Mỗi request có `X-Request-ID` và một dòng JSON trong `logs/requests.jsonl` để phân biệt request bình thường, timeout và cache hit. Không có câu trả lời giả khi backend lỗi.
 
+## Phiên bản đi kèm bài viết
+
+ZIP đi kèm bài #54 là mã đầy đủ của bài: commit `9e52ae6` trên GitHub cộng thêm traceback cho lỗi 500, `show_config.py` và chọn log theo request ID. Nếu lấy mã từ GitHub, checkout commit đó rồi áp dụng file `aiguru_ai_api_health_timeout_cache-review.patch` đi kèm PDF trước khi chạy test; kết quả giống hệt ZIP.
+
 ## Chạy trên Linux/bash
 
 Đã thử trên Ubuntu 20.04.6 LTS, Bash 5.0.17, Python 3.12.9. Cần `git`, `curl`, `ss` (iproute2) và Python 3.12 có venv.
 
+Giải nén ZIP rồi mở terminal tại thư mục chứa `main.py` (hoặc từ thư mục cha chạy lệnh `cd` dưới đây):
+
 ```bash
-git clone https://github.com/nguyenhoangtrungg/aiguru_ai_api_health_timeout_cache.git
 cd aiguru_ai_api_health_timeout_cache
 python3 -m venv .venv
 source .venv/bin/activate
@@ -23,7 +28,7 @@ python -m pytest -q
 cp .env.example .env
 ```
 
-Sửa `.env`: thay `LLM_MODEL` và `LLM_API_KEY` bằng model ID và key OpenRouter hợp lệ (hoặc base URL/model của server tương thích Chat Completions). Không đưa key thật vào Git. Biến môi trường của shell ghi đè giá trị trong `.env`; cấu hình chỉ được đọc lúc khởi động.
+Sửa `.env`: thay `LLM_MODEL` và `LLM_API_KEY` bằng model ID và key OpenRouter hợp lệ (hoặc base URL/model của server tương thích Chat Completions). Không đưa key thật vào Git. Biến môi trường của shell ghi đè giá trị trong `.env`; biến shell đặt rỗng (`TEN_BIEN=`) dùng mặc định của code, không lấy giá trị trong `.env`. Cấu hình chỉ được đọc lúc khởi động.
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
@@ -32,6 +37,10 @@ Sửa `.env`: thay `LLM_MODEL` và `LLM_API_KEY` bằng model ID và key OpenRou
 | `CACHE_TTL_SECONDS` | 60 | Thời gian sống của một câu trả lời trong cache |
 | `CACHE_MAX_ENTRIES` | 100 | Số câu trả lời tối đa; đầy thì xóa mục thêm sớm nhất |
 | `REQUEST_LOG_FILE` | `logs/requests.jsonl` | File log JSONL, đường dẫn tương đối tính từ thư mục project |
+
+Xem cấu hình hiệu lực bằng `python show_config.py`; lệnh đọc cả shell và `.env`, chỉ in danh sách trường cho phép và `api_key_set`, không in key. Không dùng lệnh lọc văn bản để chia sẻ nội dung `.env`.
+
+`message` phải là chuỗi 1–2.000 ký tự sau trim hai đầu; không nhận trường thừa. Sai hợp đồng trả 422 trước khi gọi model. API đổi lỗi kết nối và provider 429/5xx thành 503; status này không chỉ có nghĩa là không kết nối được backend.
 
 Terminal A, không dùng `--reload` (reload khởi động lại tiến trình và xóa cache):
 
@@ -67,7 +76,18 @@ LLM_TIMEOUT_SECONDS=10 MODEL_DEADLINE_SECONDS=1 CACHE_TTL_SECONDS=5 \
 python -m uvicorn main:app --host 127.0.0.1 --port 18054
 ```
 
-Gửi một câu hỏi chưa có trong cache: nhận HTTP 504 sau khoảng 1 giây. Log ghi `outcome=model_timeout`, `timeout_kind=model_deadline`. `GET http://127.0.0.1:18055/stats` cho biết backend đã nhận bao nhiêu request.
+Gửi một câu hỏi chưa có trong cache và lưu header của response:
+
+```bash
+curl -sS -i --max-time 30 -D timeout.headers \
+  http://127.0.0.1:18054/chat \
+  -H 'Content-Type: application/json' --data '{"message":"Timeout là gì?"}'
+python request_logging.py logs/requests.jsonl --headers timeout.headers
+```
+
+Nhận HTTP 504 sau khoảng 1 giây. Bản ghi JSON có `"outcome": "model_timeout"` và `"timeout_kind": "model_deadline"`. `GET http://127.0.0.1:18055/stats` cho biết backend đã nhận bao nhiêu request.
+
+File JSONL được ghi nối tiếp qua các lần restart. Dùng `--headers` hoặc `--request-id ID` để lấy đúng bản ghi, tránh chọn timeout cũ. Traceback lỗi ngoài dự kiến ghi qua `uvicorn.error` kèm ID; JSONL có một bản ghi/request. Traceback có thể chứa nội dung exception; chỉ chia sẻ bản ghi đã kiểm tra.
 
 ## Kiểm thử
 
@@ -85,3 +105,12 @@ Gồm test hợp đồng (MockTransport), cache/TTL/FIFO bằng đồng hồ gi�
 - Deadline dừng việc chờ ở API; không bảo đảm provider ngừng xử lý hoặc không tính phí.
 - `/health` chỉ là liveness, không chứng minh model sẵn sàng.
 - API local, chưa có xác thực client, streaming hay triển khai public.
+
+Test chẩn đoán không dùng socket/không gọi model thật:
+
+```bash
+python -m pytest -q tests/test_api.py::test_unexpected_error_is_logged_as_500
+python -m pytest -q tests/test_revision.py
+```
+
+Bộ test có 93 ca. Với venv tạo từ `requirements-lock.txt`, `python -m pytest -q` cho `92 passed, 1 skipped` (ca bị bỏ qua là test live). Các test tích hợp mở cổng local nên môi trường chạy test phải cho phép tạo socket.

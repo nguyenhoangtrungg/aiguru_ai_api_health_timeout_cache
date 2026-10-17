@@ -2,11 +2,11 @@
 
 Read the log:  python request_logging.py logs/requests.jsonl
 """
+import argparse
 from datetime import datetime, timezone
 import json
 import logging
 from pathlib import Path
-import sys
 import time
 import uuid
 
@@ -54,7 +54,7 @@ async def log_requests(request: Request, call_next):
     """Middleware: attach X-Request-ID and X-Cache, then write the final log record."""
     request_id = uuid.uuid4().hex[:12]
     state = request.state
-    # /chat starts as BYPASS: a 422 is produced before the route can mark MISS or HIT.
+    # BYPASS means the route has not looked up the cache (e.g. 422 or 405).
     state.cache_status = "BYPASS" if request.url.path == "/chat" else None
     state.outcome = None
     state.backend_calls = 0
@@ -65,6 +65,10 @@ async def log_requests(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception:
+        logging.getLogger("uvicorn.error").exception(
+            "Unhandled request error request_id=%s", request_id)
+        state.outcome = "internal_error"
+        state.error_code = "internal_error"
         state.cache_status = None
         response = JSONResponse({"detail": "Internal Server Error"}, status_code=500)
     duration_ms = round((time.monotonic() - start) * 1000, 1)
@@ -91,5 +95,38 @@ def summarize(path: Path) -> None:
               f"cache={record['cache_status'] or '-'} calls={record['backend_calls']} model_ms={model_ms}")
 
 
+def show_request(path: Path, request_id: str) -> None:
+    """Find the exact request, even when older runs are present in the same file."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        if record.get("event") == "request" and record.get("request_id") == request_id:
+            print(json.dumps(record, ensure_ascii=False, indent=2))
+            return
+    raise SystemExit(f"No request record for ID {request_id}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Read request JSONL logs")
+    parser.add_argument("path", nargs="?", type=Path, default=Path("logs/requests.jsonl"))
+    selector = parser.add_mutually_exclusive_group()
+    selector.add_argument("--request-id", help="print the JSON record for this exact ID")
+    selector.add_argument("--headers", type=Path, help="read X-Request-ID from a curl -D file")
+    args = parser.parse_args()
+    request_id = args.request_id
+    if args.headers:
+        ids = []
+        for line in args.headers.read_text(encoding="utf-8").splitlines():
+            name, sep, value = line.partition(":")
+            if sep and name.lower() == "x-request-id":
+                ids.append(value.strip())
+        if len(ids) != 1 or not ids[0]:
+            parser.error("headers file must contain exactly one non-empty X-Request-ID")
+        request_id = ids[0]
+    if request_id:
+        show_request(args.path, request_id)
+    else:
+        summarize(args.path)
+
+
 if __name__ == "__main__":
-    summarize(Path(sys.argv[1] if len(sys.argv) > 1 else "logs/requests.jsonl"))
+    main()

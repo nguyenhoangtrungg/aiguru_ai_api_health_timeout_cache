@@ -19,7 +19,7 @@ class ChatRequest(BaseModel):
     message: str = Field(
         strict=True, min_length=1, max_length=2000,
         description="Text; strip outer whitespace before checking 1–2000 characters.",
-        examples=["Giải thích cache trong một câu tiếng Việt."],
+        examples=["Giải thích cache trong một câu tiếng Việt ngắn gọn."],
     )
 
     @field_validator("message", mode="before")
@@ -48,7 +48,8 @@ class BackendErrorResponse(BaseModel):
 HEADERS = {
     "X-Request-ID": {"description": "ID that matches the record in logs/requests.jsonl",
                      "schema": {"type": "string"}},
-    "X-Cache": {"description": "HIT: answer from cache; MISS: model was called; BYPASS: invalid input",
+    "X-Cache": {"description": ("HIT: cached answer; MISS: model call attempted; "
+                                "BYPASS: cache not checked"),
                 "schema": {"type": "string", "enum": ["HIT", "MISS", "BYPASS"]}},
 }
 
@@ -62,7 +63,8 @@ def create_app(settings: Settings | None = None, transport=None, clock=time.mono
         handler = request_logging.open_log(app.state.settings.request_log_file)
         request_logging.write({"event": "startup", **app.state.settings.public_summary()})
         logging.getLogger("uvicorn.error").info(
-            "AI Guru config: model=%s, deadline=%ss, cache_ttl=%ss, log=%s",
+            ("AI Guru config: model=%s, deadline=%ss, "
+             "cache_ttl=%ss, log=%s"),
             app.state.settings.model, app.state.settings.deadline_seconds,
             app.state.settings.cache_ttl_seconds, app.state.settings.request_log_file.name)
         try:
@@ -78,7 +80,8 @@ def create_app(settings: Settings | None = None, transport=None, clock=time.mono
     app = FastAPI(
         title="AI Guru — Chat API with health, timeout and cache", version="1.1.0",
         lifespan=lifespan,
-        description="Single-turn chat through an independent model API, with an in-memory answer cache.",
+        description=("Single-turn chat through an independent model API, "
+                     "with an in-memory answer cache."),
     )
     app.middleware("http")(request_logging.log_requests)
 
